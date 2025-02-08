@@ -1,4 +1,5 @@
 use alexandria_data_structures::array_ext::ArrayTraitExt;
+use alexandria_math::fast_power::{fast_power};
 use alexandria_numeric::integers::UIntBytes;
 
 // Possible RLP errors
@@ -20,6 +21,12 @@ pub enum RLPType {
 pub enum RLPItem {
     String: Span<u8>,
     List: Span<RLPItem>,
+}
+
+#[derive(Drop, Copy, PartialEq)]
+pub enum RLPItem64 {
+    String: Span<u64>,
+    List: Span<RLPItem64>,
 }
 
 #[generate_trait]
@@ -194,5 +201,90 @@ pub impl RLPImpl of RLPTrait {
         }
 
         Result::Ok(output.span())
+    }
+}
+
+
+#[generate_trait]
+pub impl RLPImpl64 of RLPTrait64 {
+    fn encode_64(mut input: Span<RLPItem64>) -> Result<Span<u64>, RLPError> {
+        if input.len() == 0 {
+            return Result::Err(RLPError::EmptyInput);
+        }
+
+        let mut output: Array<u64> = Default::default();
+        let item = input.pop_front().unwrap();
+
+        match item {
+            RLPItem64::String(string) => { output.append_span(Self::encode_string_64(*string)?); },
+            RLPItem64::List(list) => {
+                if (*list).len() == 0 {
+                    output.append(0xC0);
+                } else {
+                    let payload = Self::encode_64(*list)?;
+                    let payload_len = payload.len();
+                    if payload_len > 55 {
+                        // Large strings (len ≥ 56)
+                        let len_bytes_count = Self::len_in_bytes(payload_len.into());
+                        output.append(0xF7 + len_bytes_count.into());
+                        output.append_span(Self::to_bytes(len_bytes_count, payload_len.into()));
+                    } else {
+                        output.append(0xC0 + payload_len.into());
+                    }
+                    output.append_span(payload);
+                }
+            },
+        }
+
+        if input.len() > 0 {
+            output.append_span(Self::encode_64(input)?);
+        }
+
+        Result::Ok(output.span())
+    }
+
+    fn encode_string_64(input: Span<u64>) -> Result<Span<u64>, RLPError> {
+        let len: u32 = input.len().into();
+        let mut encoding: Array<u64> = Default::default(); // Single allocation
+        if len == 0 {
+            return Result::Ok(array![0x80].span());
+        } else if len == 1 && *input[0] < 0x80 {
+            return Result::Ok(input);
+        } else if len < 56 {
+            encoding.append((0x80 + len).into());
+        } else {
+            let len_bytes_count = Self::len_in_bytes(len.into());
+            encoding.append((0xB7 + len_bytes_count).into());
+            encoding.append_span(Self::to_bytes(len_bytes_count, len.into()));
+        }
+        encoding.append_span(input);
+        return Result::Ok(encoding.span());
+    }
+
+    fn to_bytes(len_bytes_count: u64, len: u64) -> Span<u64> {
+        let mut bytes: Array<u64> = Default::default();
+
+        // Most significant byte (divide by 256)
+        if len >= 256 {
+            let high_byte = len / 256;
+            bytes.append(high_byte);
+        }
+
+        // Least significant byte (modulo 256)
+        let low_byte = len % 256;
+        bytes.append(low_byte);
+        bytes.span()
+    }
+
+    fn len_in_bytes(value: u64) -> u64 {
+        if value < 256 { //2⁸
+            return 1;
+        } else if value < 65536 { //2¹⁶
+            return 2;
+        } else if value < 16777216 { //2²⁴
+            return 3;
+        } else {
+            return 4;
+        }
     }
 }
