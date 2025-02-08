@@ -1,4 +1,3 @@
-use alexandria_data_structures::array_ext::ArrayTraitExt;
 use alexandria_encoding::rlp::{RLPError, RLPItem, RLPItem64, RLPTrait, RLPTrait64, RLPType};
 
 #[test]

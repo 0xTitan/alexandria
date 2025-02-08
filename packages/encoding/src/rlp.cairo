@@ -1,5 +1,4 @@
 use alexandria_data_structures::array_ext::ArrayTraitExt;
-use alexandria_math::fast_power::{fast_power};
 use alexandria_numeric::integers::UIntBytes;
 
 // Possible RLP errors
