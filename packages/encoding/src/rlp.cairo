@@ -1,4 +1,5 @@
 use alexandria_math::fast_power::{fast_power};
+use alexandria_math::{U64BitShift, U128BitShift};
 
 #[generate_trait]
 pub impl RLPImpl64 of RLPTrait64 {
@@ -6,37 +7,31 @@ pub impl RLPImpl64 of RLPTrait64 {
         if input == 0 {
             return 0x80; // RLP encoding for empty input
         } else if input < 0x80 {
-            return input; // Single byte values are encoded as themselves
+            return input.into(); // Single byte values are encoded as themselves
+        }
+
+        let byte_size: u64 = Self::get_byte_size(input).into(); // Get actual byte length
+        if byte_size < 56 {
+            let prefix = 0x80 + byte_size;
+            let shifted_prefix = prefix.into() * U64BitShift::shl(256, 8 * (byte_size.into()-1));
+
+            let result = (shifted_prefix + input.into());
+            result
         } else {
-            let byte_len = Self::get_byte_size(input); // Get actual byte length
-            if byte_len < 56 {
-                return Self::add_rlp_prefix(input, byte_len.into()); // Short encoding
-            } else {
-                return Self::encode_long_form(
-                    input, byte_len.into(),
-                ); // Long encoding for >= 56 bytes
-            }
+            let len_of_length: u64 = Self::get_byte_size(byte_size)
+                .into(); // Number of bytes in `byte_size`
+            let prefix = 0xB7 + len_of_length; // Compute prefix
+            
+            //for a length of 500 (0x01F4) -> 0xB7+0x01FA 
+            let shifted_prefix = (prefix.into() * U64BitShift::shl(256, 8 * (len_of_length - 1)))
+                + byte_size*8;
+            let result = (shifted_prefix * U64BitShift::shl(256, 8 * (byte_size-1))) + input;
+
+            result
         }
     }
 
-    fn add_rlp_prefix(value: u64, length: u64) -> u64 {
-        let prefix = 0x80 + length; // Calculate RLP prefix (e.g., 0x83 for length 3)
-        let shifted_prefix: u64 = (prefix * fast_power(256, length.into())).into(); //byte shift
-
-        (shifted_prefix + value)
-    }
-
-    fn encode_long_form(value: u64, length: u64) -> u64 {
-        let len_of_length = Self::get_byte_size(length.into()); // Get byte size of length
-        let prefix: u64 = 0xB7 + len_of_length.into(); // Compute long-form prefix
-
-        // Shift
-        let shifted_prefix = prefix * fast_power(256, len_of_length.into() + length);
-        let shifted_length = length * fast_power(256, length);
-
-        return shifted_prefix.into() + shifted_length.into() + value;
-    }
-
+    // Function to determine the number of bytes needed to represent `input`
     fn get_byte_size(mut value: u64) -> u8 {
         if value == 0 {
             return 1_u8;
