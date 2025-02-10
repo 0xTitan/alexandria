@@ -1,4 +1,4 @@
-use alexandria_encoding::rlp::{RLPTrait64, RLPError};
+use alexandria_encoding::rlp::{RLPError, RLPTrait64};
 
 
 #[test]
@@ -6,7 +6,7 @@ use alexandria_encoding::rlp::{RLPTrait64, RLPError};
 fn test_rlp_encode_empty_input_should_fail() {
     let input = array![];
 
-    let res =  RLPTrait64::encode_word_64(input.span());
+    let res = RLPTrait64::encode_word_64(input.span());
 
     assert!(res.is_err(), "Should have failed");
     assert!(res.unwrap_err() == RLPError::EmptyInput, "err != EmptyInput");
@@ -81,7 +81,7 @@ fn test_rlp64_encode_string_gt_56_bytes() {
             0x6c6096f6e0111111,
             0x6c6096f6e0111111,
             0x6c6096f6e0111111,
-            0x6c6096f6
+            0x6c6096f6,
         ]
             .span(),
     );
@@ -98,5 +98,4 @@ fn test_rlp64_encode_string_gt_56_bytes() {
     assert!(*res.unwrap()[7] == 0x6c6096f6e0111111, "Wrong RLP at index 7");
     assert!(*res.unwrap()[8] == 0x6c6096f6, "Wrong RLP at index 8");
 }
-
 
