@@ -1,33 +1,54 @@
-use alexandria_math::fast_power::{fast_power};
-use alexandria_math::{U64BitShift, U128BitShift};
+use alexandria_math::{U128BitShift, U64BitShift};
+
+// Possible RLP errors
+#[derive(Drop, Copy, PartialEq)]
+pub enum RLPError {
+    EmptyInput,
+    InputTooShort,
+    PayloadTooLong,
+}
 
 #[generate_trait]
 pub impl RLPImpl64 of RLPTrait64 {
-    fn encode_word_64(input: u64) -> u64 {
-        if input == 0 {
-            return 0x80; // RLP encoding for empty input
-        } else if input < 0x80 {
-            return input.into(); // Single byte values are encoded as themselves
+    fn encode_word_64(mut input: Span<u64>) -> Result<Span<u64>, RLPError> {
+        if input.len() == 0 {
+            return Result::Err(RLPError::EmptyInput);
+        }
+        //get last item to get last length
+        let item = input.at(input.len() - 1);
+
+        if *item == 0 {
+            return Result::Ok(array![0x80].span()); // RLP encoding for empty input
+        } else if *item < 0x80 {
+            return Result::Ok(input); // Single byte values are encoded as themselves
         }
 
-        let byte_size: u64 = Self::get_byte_size(input).into(); // Get actual byte length
+        let mut byte_size = if (input.len() < 2) {
+            Self::get_byte_size(*item).into()
+        } else {
+            Self::get_byte_size(*item).into() + ((input.len().into() - 1) * 8)
+        }; // Get actual byte length
+
         if byte_size < 56 {
             let prefix = 0x80 + byte_size;
-            let shifted_prefix = prefix.into() * U64BitShift::shl(256, 8 * (byte_size.into()-1));
-
-            let result = (shifted_prefix + input.into());
-            result
+            if byte_size >= 8 {
+                let mut result = array![prefix];
+                result.append_span(input);
+                return Result::Ok(result.span());
+            }
+            let shifted_prefix = prefix.into() * U64BitShift::shl(256, 8 * (byte_size - 1));
+            let result = (shifted_prefix + *item);
+            Result::Ok(array![result].span())
         } else {
             let len_of_length: u64 = Self::get_byte_size(byte_size)
                 .into(); // Number of bytes in `byte_size`
             let prefix = 0xB7 + len_of_length; // Compute prefix
-            
-            //for a length of 500 (0x01F4) -> 0xB7+0x01FA 
+            //for a length of 500 (0x01F4) -> 0xB7+0x01FA
             let shifted_prefix = (prefix.into() * U64BitShift::shl(256, 8 * (len_of_length - 1)))
-                + byte_size*8;
-            let result = (shifted_prefix * U64BitShift::shl(256, 8 * (byte_size-1))) + input;
-
-            result
+                + byte_size;
+            let mut result = array![shifted_prefix];
+            result.append_span(input);
+            Result::Ok(result.span())
         }
     }
 
