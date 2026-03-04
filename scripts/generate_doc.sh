@@ -16,14 +16,21 @@ scarb doc --workspace \
   --exclude alexandria_macros_tests \
   --remote-base-url "$REMOTE_URL"
 
+# Detect sed in-place flag (macOS vs Linux)
+if sed --version >/dev/null 2>&1; then
+  SED_INPLACE=(sed -i)
+else
+  SED_INPLACE=(sed -i '')
+fi
+
 # Inject custom intro page
 cp docs/intro.md "$DOC_SRC/intro.md"
-sed -i '' '1i\
-[Introduction](./intro.md)\
+"${SED_INPLACE[@]}" '1i\
+[Introduction](./intro.md)
 ' "$DOC_SRC/SUMMARY.md"
 
 # Remove core crate section (Cairo built-in, not excludable via --exclude)
-sed -i '' '/^- \[core\]/,/^- \[/{/^- \[core\]/d;/^- \[/!d;}' "$DOC_SRC/SUMMARY.md"
+"${SED_INPLACE[@]}" '/^- \[core\]/,/^- \[/{/^- \[core\]/d;/^- \[/!d;}' "$DOC_SRC/SUMMARY.md"
 
 # Use our custom book.toml
 cp docs/book.toml target/doc/book.toml
